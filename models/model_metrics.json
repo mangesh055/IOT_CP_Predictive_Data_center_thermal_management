@@ -1,0 +1,6 @@
+{
+  "mae": 0.1472,
+  "rmse": 0.1922,
+  "r2": 0.9866,
+  "algorithm": "RandomForestRegressor (scikit-learn)"
+}
