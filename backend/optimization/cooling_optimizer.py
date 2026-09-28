@@ -70,7 +70,8 @@ class CoolingOptimizer:
         candidate_evals = []
         safe_candidates = []
 
-        max_allowable_temp = self.safety_limit - self.target_safety_margin # e.g. 26.4°C
+        max_allowable_temp = self.safety_limit - self.target_safety_margin  # e.g. 26.4°C
+        target_temp_setpoint = 22.5  # Optimal data center target temperature (°C)
 
         for candidate in self.candidate_levels:
             # Query ML model for predicted thermal impact at this fan level
@@ -82,49 +83,57 @@ class CoolingOptimizer:
             fan_power = power_eval["fan_power_w"]
 
             is_safe = (pred_15m <= max_allowable_temp)
+            
+            # Multi-objective optimization cost:
+            # 1. Thermal penalty if predicted temperature exceeds ideal setpoint
+            thermal_penalty = 50.0 * (max(0.0, pred_15m - target_temp_setpoint) ** 2)
+            # 2. Overcooling penalty if rack is unnecessarily chilled below 21.0°C
+            overcool_penalty = 20.0 * (max(0.0, 21.0 - pred_15m) ** 2)
+            # 3. Aerodynamic fan power consumption (energy cost)
+            energy_cost = fan_power
+            # Total composite score (lower is better)
+            composite_cost = energy_cost + thermal_penalty + overcool_penalty
+
             eval_record = {
                 "fan_speed": candidate,
                 "predicted_15m": pred_15m,
                 "confidence": confidence,
                 "fan_power_w": fan_power,
+                "composite_cost": composite_cost,
                 "is_safe": is_safe
             }
             candidate_evals.append(eval_record)
             if is_safe:
                 safe_candidates.append(eval_record)
 
-        # Select safest lowest-energy candidate
+        # Select candidate that minimizes total composite cost while remaining within safety envelope
         if safe_candidates:
-            # Sort by lowest fan power
-            selected = min(safe_candidates, key=lambda x: x["fan_power_w"])
+            selected = min(safe_candidates, key=lambda x: x["composite_cost"])
             chosen_fan = selected["fan_speed"]
             predicted_future = selected["predicted_15m"]
             confidence = selected["confidence"]
         else:
-            # If all lower candidates exceed threshold, use 100% maximum cooling
+            # If all candidates exceed safety limit, enforce 100% emergency maximum cooling
             chosen_fan = 100.0
             predicted_future = candidate_evals[-1]["predicted_15m"]
             confidence = candidate_evals[-1]["confidence"]
-
-        # Smooth changes (don't make erratic micro-jumps unless required by temperature rise)
-        if abs(chosen_fan - current_fan) < 4.0 and current_temp < 25.5:
-            chosen_fan = current_fan
 
         # Generate Explainable Rationale
         margin = round(self.safety_limit - predicted_future, 2)
         power_est = self.energy_model.calculate_power(chosen_fan)["total_cooling_power_w"]
 
-        if gpu > 70.0:
-            workload_clause = f"High GPU workload ({gpu}%)"
-        elif cpu > 70.0:
-            workload_clause = f"High CPU load ({cpu}%)"
-        else:
+        workload_ratio = (cpu * 0.45 + gpu * 0.55)
+        if workload_ratio > 65.0:
+            workload_clause = f"Heavy computational load (CPU {cpu}%, GPU {gpu}%)"
+        elif workload_ratio > 40.0:
             workload_clause = f"Moderate workload (CPU {cpu}%, GPU {gpu}%)"
+        else:
+            workload_clause = f"Light workload (CPU {cpu}%, GPU {gpu}%)"
 
         reason = (
-            f"{workload_clause} analyzed. Predicted +15m temperature is {predicted_future}°C. "
-            f"Optimized fan speed to {chosen_fan}% to guarantee {margin}°C safety margin under {self.safety_limit}°C ceiling "
-            f"while minimizing fan aerodynamic energy consumption."
+            f"{workload_clause} at {current_temp}°C analyzed across {len(self.candidate_levels)} fan levels. "
+            f"Selected {chosen_fan}% fan (Predicted 15m: {predicted_future}°C, Margin: {margin}°C) "
+            f"to balance thermal setpoint tracking with energy efficiency."
         )
 
         return {

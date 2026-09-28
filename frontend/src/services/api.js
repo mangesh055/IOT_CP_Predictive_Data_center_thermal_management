@@ -73,6 +73,22 @@ export const api = {
     });
     return res.json();
   },
+  async setCustomParameters(params) {
+    const res = await fetch(`${API_BASE}/custom-parameters`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+    });
+    return res.json();
+  },
+  async triggerEvent(eventType) {
+    const res = await fetch(`${API_BASE}/trigger-event`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_type: eventType }),
+    });
+    return res.json();
+  },
   async startPresentation() {
     const res = await fetch(`${API_BASE}/presentation/start`, { method: 'POST' });
     return res.json();

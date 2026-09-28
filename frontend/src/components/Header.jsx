@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Play, Pause, RotateCcw, Zap, ShieldCheck, Activity, 
-  Cpu, Server, BarChart3, HelpCircle, Radio, Sparkles
+  Cpu, Server, BarChart3, HelpCircle, Radio, Sparkles, AlertOctagon
 } from 'lucide-react';
 
 export default function Header({
@@ -13,7 +13,9 @@ export default function Header({
   onReset,
   onSetSpeed,
   onSetMode,
-  onStartPresentation
+  onStartPresentation,
+  manualBreachSim = false,
+  onToggleManualBreach
 }) {
   const isRunning = state?.is_running ?? true;
   const speed = state?.speed_multiplier ?? 1.0;
@@ -47,25 +49,10 @@ export default function Header({
 
         {/* Global Controls & Presentation Trigger */}
         <div className="flex flex-wrap items-center gap-2 lg:gap-3">
-          {/* Simulation Time & Speed */}
+          {/* Simulation Time */}
           <div className="flex items-center bg-slate-900/90 border border-datacenter-border px-3 py-1.5 rounded-lg text-xs font-mono text-slate-300">
             <span className="text-slate-500 mr-2">TIME:</span>
             <span className="text-cyan-400 font-semibold">{state?.sim_time_formatted || '00:00'}</span>
-            <div className="ml-3 pl-3 border-l border-slate-700 flex items-center space-x-1">
-              {[1, 5, 10, 50].map((spd) => (
-                <button
-                  key={spd}
-                  onClick={() => onSetSpeed(spd)}
-                  className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
-                    speed === spd
-                      ? 'bg-cyan-500 text-black shadow-sm'
-                      : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                  }`}
-                >
-                  {spd}x
-                </button>
-              ))}
-            </div>
           </div>
 
           {/* Start/Pause and Reset Buttons */}
@@ -95,6 +82,22 @@ export default function Header({
               <RotateCcw className="w-4 h-4" />
             </button>
           </div>
+
+          {/* Cinematic High Alert / Breach Mode Button */}
+          {onToggleManualBreach && (
+            <button
+              onClick={onToggleManualBreach}
+              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-bold tracking-wider transition-all shadow-md ${
+                manualBreachSim
+                  ? 'bg-rose-600 text-white border border-rose-400 animate-pulse shadow-rose-900/60'
+                  : 'bg-rose-950/70 hover:bg-rose-900/90 text-rose-300 border border-rose-700/60 hover:text-white'
+              }`}
+              title="Toggle cinematic Hollywood movie hacking / critical breach alert mode"
+            >
+              <AlertOctagon className="w-3.5 h-3.5 text-rose-400" />
+              <span>{manualBreachSim ? '🚨 STOP BREACH SIM' : '⚡ MOVIE ALERT FX'}</span>
+            </button>
+          )}
 
           {/* Presentation Mode Button */}
           <button

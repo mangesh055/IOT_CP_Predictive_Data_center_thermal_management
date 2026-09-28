@@ -7,7 +7,15 @@ import ScenarioControls from '../components/ScenarioControls';
 import LiveCharts from '../components/LiveCharts';
 import EventLog from '../components/EventLog';
 
-export default function DashboardPage({ state, historyData, onSelectScenario }) {
+export default function DashboardPage({
+  state,
+  historyData,
+  onSelectScenario,
+  onCustomParameters,
+  onTriggerEvent,
+  manualBreachSim = false,
+  onToggleManualBreach
+}) {
   return (
     <div className="space-y-4">
       {/* 1. Top KPI Summary Cards */}
@@ -19,7 +27,7 @@ export default function DashboardPage({ state, historyData, onSelectScenario }) 
       {/* 3. Safety Guardrails Monitor */}
       <SafetyMonitor state={state} />
 
-      {/* 4. Split Section: Explainable AI Decision Card + Scenario Injection */}
+      {/* 4. Split Section: Explainable AI Decision Card + Interactive Control Suite */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         <div className="lg:col-span-5">
           <AIDecisionCard state={state} />
@@ -27,7 +35,12 @@ export default function DashboardPage({ state, historyData, onSelectScenario }) 
         <div className="lg:col-span-7">
           <ScenarioControls
             currentScenario={state?.scenario || 'NORMAL'}
+            customSettings={state?.custom_settings}
             onSelectScenario={onSelectScenario}
+            onCustomParameters={onCustomParameters}
+            onTriggerEvent={onTriggerEvent}
+            manualBreachSim={manualBreachSim}
+            onToggleManualBreach={onToggleManualBreach}
           />
         </div>
       </div>

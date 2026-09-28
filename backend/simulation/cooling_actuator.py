@@ -28,18 +28,8 @@ class CoolingActuator:
         self.target_fan_speed = max(0.0, min(100.0, target_pwm))
 
     def step(self, dt_seconds: float = 1.0) -> dict:
-        """Advance physical actuator state towards target with realistic slew rate."""
-        max_change = self.slew_rate * dt_seconds
-        diff = self.target_fan_speed - self.actual_fan_speed
-
-        if abs(diff) <= max_change:
-            self.actual_fan_speed = self.target_fan_speed
-        elif diff > 0:
-            self.actual_fan_speed += max_change
-        else:
-            self.actual_fan_speed -= max_change
-
-        self.actual_fan_speed = max(0.0, min(100.0, self.actual_fan_speed))
+        """Instantly update physical actuator state towards target for real-time responsiveness."""
+        self.actual_fan_speed = self.target_fan_speed
 
         # Effective fan output influenced by mechanical degradation
         effective_output = self.actual_fan_speed * self.degradation_factor

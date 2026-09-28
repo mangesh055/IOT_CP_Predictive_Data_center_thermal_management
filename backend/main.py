@@ -97,6 +97,19 @@ class ExperimentRequest(BaseModel):
     scenario: str = "HIGH_LOAD"
     duration_sec: float = 30.0
 
+class CustomParametersRequest(BaseModel):
+    custom_cpu: Optional[float] = None
+    custom_gpu: Optional[float] = None
+    ambient_temp: Optional[float] = None
+    inlet_temp: Optional[float] = None
+    thermal_responsiveness: Optional[float] = None
+    workload_pattern: Optional[str] = None
+    manual_fan: Optional[float] = None
+    hard_limit: Optional[float] = None
+
+class TriggerEventRequest(BaseModel):
+    event_type: str
+
 # --- REST Endpoints ---
 
 @app.get("/api/status")
@@ -232,6 +245,31 @@ def set_scenario(req: ScenarioRequest):
 def set_control_mode(req: ControlModeRequest):
     dc_sim.set_control_mode(req.mode)
     return {"control_mode": dc_sim.control_mode}
+
+@app.post("/api/custom-parameters")
+def set_custom_parameters(req: CustomParametersRequest):
+    dc_sim.set_custom_parameters(
+        custom_cpu=req.custom_cpu,
+        custom_gpu=req.custom_gpu,
+        ambient_temp=req.ambient_temp,
+        inlet_temp=req.inlet_temp,
+        thermal_responsiveness=req.thermal_responsiveness,
+        workload_pattern=req.workload_pattern,
+        manual_fan=req.manual_fan,
+        hard_limit=req.hard_limit
+    )
+    return {
+        "status": "SUCCESS",
+        "custom_settings": dc_sim.latest_state.get("custom_settings", {})
+    }
+
+@app.post("/api/trigger-event")
+def trigger_event(req: TriggerEventRequest):
+    dc_sim.trigger_event(req.event_type)
+    return {
+        "status": "SUCCESS",
+        "event_type": req.event_type
+    }
 
 @app.post("/api/presentation/start")
 def start_presentation():

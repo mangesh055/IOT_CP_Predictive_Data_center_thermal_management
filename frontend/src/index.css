@@ -61,3 +61,149 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #38bdf8;
 }
+
+/* =========================================================
+   CINEMATIC MOVIE HACKING / HIGH ALERT ANIMATIONS & EFFECTS
+   ========================================================= */
+
+@keyframes emergency-vignette-pulse {
+  0% {
+    box-shadow: inset 0 0 50px rgba(225, 29, 72, 0.3), inset 0 0 120px rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+  50% {
+    box-shadow: inset 0 0 120px rgba(225, 29, 72, 0.7), inset 0 0 220px rgba(239, 68, 68, 0.45);
+    border-color: rgba(239, 68, 68, 0.95);
+  }
+  100% {
+    box-shadow: inset 0 0 50px rgba(225, 29, 72, 0.3), inset 0 0 120px rgba(239, 68, 68, 0.2);
+    border-color: rgba(239, 68, 68, 0.4);
+  }
+}
+
+.cinematic-vignette {
+  animation: emergency-vignette-pulse 1.1s ease-in-out infinite;
+}
+
+@keyframes hazard-move {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 40px 0;
+  }
+}
+
+.hazard-stripe-red {
+  background: repeating-linear-gradient(
+    -45deg,
+    #ef4444,
+    #ef4444 14px,
+    #180509 14px,
+    #180509 28px
+  );
+  background-size: 39.6px 28px;
+  animation: hazard-move 1.2s linear infinite;
+}
+
+.hazard-stripe-amber {
+  background: repeating-linear-gradient(
+    -45deg,
+    #f59e0b,
+    #f59e0b 14px,
+    #181005 14px,
+    #181005 28px
+  );
+  background-size: 39.6px 28px;
+  animation: hazard-move 1.2s linear infinite;
+}
+
+@keyframes warning-edge-pulse {
+  0% {
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.35), inset 0 0 15px rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.65);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(245, 158, 11, 0.8), inset 0 0 25px rgba(245, 158, 11, 0.35);
+    border-color: rgba(251, 191, 36, 1);
+  }
+  100% {
+    box-shadow: 0 0 15px rgba(245, 158, 11, 0.35), inset 0 0 15px rgba(245, 158, 11, 0.15);
+    border-color: rgba(245, 158, 11, 0.65);
+  }
+}
+
+.warning-edge-glow {
+  animation: warning-edge-pulse 1.3s ease-in-out infinite;
+}
+
+/* CRT Scanlines Overlay */
+.crt-overlay {
+  background: linear-gradient(
+    rgba(18, 16, 16, 0) 50%, 
+    rgba(0, 0, 0, 0.4) 50%
+  ), 
+  linear-gradient(
+    90deg,
+    rgba(255, 0, 0, 0.04),
+    rgba(0, 255, 0, 0.02),
+    rgba(0, 0, 255, 0.04)
+  );
+  background-size: 100% 3px, 6px 100%;
+  pointer-events: none;
+}
+
+@keyframes crt-sweep {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(1000%);
+  }
+}
+
+.crt-beam {
+  animation: crt-sweep 7s linear infinite;
+}
+
+/* Glitch Shake & Chromatic Text */
+@keyframes cyber-shake {
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-3px, 1px); }
+  30% { transform: translate(3px, -2px); }
+  45% { transform: translate(-2px, -1px); }
+  60% { transform: translate(2px, 2px); }
+  75% { transform: translate(-1px, 2px); }
+  90% { transform: translate(2px, -1px); }
+}
+
+.animate-cyber-shake {
+  animation: cyber-shake 0.4s ease-in-out infinite;
+}
+
+.cyber-red-glow {
+  text-shadow: 0 0 10px rgba(244, 63, 94, 0.9), 0 0 20px rgba(239, 68, 68, 0.6);
+}
+
+.cyber-chromatic {
+  text-shadow: -1.5px 0 rgba(0, 242, 254, 0.75), 1.5px 0 rgba(244, 63, 94, 0.85);
+}
+
+@keyframes radar-sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-radar-sweep {
+  animation: radar-sweep 2.4s linear infinite;
+}
+
+@keyframes fast-strobe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+
+.animate-fast-strobe {
+  animation: fast-strobe 0.45s ease-in-out infinite;
+}
+

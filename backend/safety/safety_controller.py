@@ -135,7 +135,7 @@ class SafetyController:
         # ------------------------------------------------------------------
         # SAFETY 2: TEMPERATURE RATE-OF-RISE (Preemptive heating detection)
         # ------------------------------------------------------------------
-        if rate_of_rise >= self.rate_of_rise_threshold:
+        if rate_of_rise >= self.rate_of_rise_threshold and current_temp >= 24.8:
             safety_checks["rate_of_rise"] = "WARNING"
             boosted_fan = max(final_fan, 82.0)
             if boosted_fan > final_fan:
@@ -155,8 +155,8 @@ class SafetyController:
         pred_15m = prediction.get("pred_15m", current_temp)
         confidence = prediction.get("confidence", 90.0)
 
-        # Anomaly where AI predicts temp is droping or safe but rate of rise is climbing
-        if is_ml_failed or (rate_of_rise > 0.15 and pred_15m < current_temp - 0.2):
+        # Anomaly where AI model has failed or severe divergence occurs
+        if is_ml_failed or (rate_of_rise > 0.50 and pred_15m < current_temp - 1.0 and current_temp >= 24.5):
             safety_checks["prediction_confidence"] = "FAIL"
             safety_checks["ai_authorization"] = "OVERRIDDEN"
             final_fan = 100.0 if current_temp > 25.5 else 85.0
@@ -170,21 +170,21 @@ class SafetyController:
             })
             return self._build_result(final_fan, override, primary_reason, safety_checks, events)
 
-        if confidence < self.min_confidence_threshold:
+        if confidence < self.min_confidence_threshold and current_temp >= 23.5:
             safety_checks["prediction_confidence"] = "WARNING"
-            # Low confidence policy: prohibit aggressive reduction, floor at 75%
-            if final_fan < 75.0:
-                final_fan = 75.0
+            # Low confidence policy on warm racks: prohibit aggressive reduction, floor at 70%
+            if final_fan < 70.0:
+                final_fan = 70.0
                 override = True
-                primary_reason = f"LOW PREDICTION CONFIDENCE ({confidence}% < {self.min_confidence_threshold}%). Conservative cooling floor (75%) enforced."
+                primary_reason = f"LOW PREDICTION CONFIDENCE ({confidence}% < {self.min_confidence_threshold}%). Conservative cooling floor (70%) enforced."
                 events.append({
                     "type": "CONFIDENCE_GATE",
                     "severity": "WARNING",
                     "desc": primary_reason,
-                    "action": "Enforce 75% Fan floor"
+                    "action": "Enforce 70% Fan floor"
                 })
-        elif confidence < self.conservative_confidence_threshold:
-            # Medium confidence: add +8% safety buffer
+        elif confidence < self.conservative_confidence_threshold and current_temp >= 24.0:
+            # Medium confidence on warm racks: add +8% safety buffer
             if final_fan < 70.0:
                 final_fan = min(100.0, final_fan + 8.0)
                 override = True

@@ -66,6 +66,14 @@ class DataCenterSimulation:
             "cooling_failure": False
         }
 
+        # Customizable real-time environmental and control settings
+        self.ambient_temp = 22.0
+        self.inlet_temp = 18.5
+        self.thermal_responsiveness = 1.5
+        self.manual_fan_override = None # None or float (30.0 - 100.0)
+        self.heatwave_timer = 0.0
+        self.heatwave_temp_boost = 0.0
+
         # Presentation Mode automation state
         self.presentation_active = False
         self.presentation_step = 0
@@ -186,6 +194,58 @@ class DataCenterSimulation:
         self.energy_model.reset()
         self._add_event("SYSTEM", "INFO", "Simulation environment reset to initial state.", "Reset complete")
 
+    def set_custom_parameters(
+        self,
+        custom_cpu: float = None,
+        custom_gpu: float = None,
+        ambient_temp: float = None,
+        inlet_temp: float = None,
+        thermal_responsiveness: float = None,
+        workload_pattern: str = None,
+        manual_fan: float = None,
+        hard_limit: float = None
+    ):
+        if custom_cpu is not None:
+            self.workload_gen.custom_cpu = max(5.0, min(100.0, float(custom_cpu)))
+        if custom_gpu is not None:
+            self.workload_gen.custom_gpu = max(5.0, min(100.0, float(custom_gpu)))
+        if workload_pattern:
+            self.workload_gen.set_pattern(workload_pattern)
+        if ambient_temp is not None:
+            self.ambient_temp = max(15.0, min(42.0, float(ambient_temp)))
+        if inlet_temp is not None:
+            self.inlet_temp = max(12.0, min(28.0, float(inlet_temp)))
+        if thermal_responsiveness is not None:
+            self.thermal_responsiveness = max(0.5, min(4.0, float(thermal_responsiveness)))
+        if manual_fan is not None:
+            self.manual_fan_override = None if manual_fan < 0 else max(30.0, min(100.0, float(manual_fan)))
+        if hard_limit is not None:
+            self.safety_controller.hard_temp_limit = max(23.0, min(32.0, float(hard_limit)))
+            self.optimizer.safety_limit = self.safety_controller.hard_temp_limit
+
+        self._add_event("CONFIG", "INFO", "Live custom simulation parameters updated.", "Applied")
+
+    def trigger_event(self, event_type: str):
+        ev = event_type.upper()
+        if ev == "THERMAL_SPIKE":
+            self.workload_gen.inject_spike(duration_seconds=15.0, cpu=95.0, gpu=98.0)
+            self._add_event("INJECTION", "WARNING", "Injected 15-second compute spike across cluster (CPU 95%, GPU 98%).", "Preemptive cooling active")
+        elif ev == "HEATWAVE":
+            self.heatwave_timer = 25.0
+            self.heatwave_temp_boost = 6.0
+            self._add_event("INJECTION", "WARNING", "Injected external ambient heatwave (+6.0°C thermal load).", "Chiller compensation active")
+        elif ev == "COOLING_BLAST":
+            self.manual_fan_override = 100.0
+            self._add_event("OPERATOR", "INFO", "Triggered emergency 100% cooling blast across all CRAH units.", "Fan set to 100%")
+        elif ev == "RANDOMIZE_LOAD":
+            self.workload_gen.set_pattern("CHAOS")
+            self._add_event("INJECTION", "INFO", "Randomized non-uniform compute load across all server racks.", "Stress testing AI control")
+        elif ev == "RESET_OVERRIDE":
+            self.manual_fan_override = None
+            self.heatwave_timer = 0.0
+            self.heatwave_temp_boost = 0.0
+            self._add_event("OPERATOR", "INFO", "Cleared manual overrides and restored autonomous closed loop.", "Autonomous mode")
+
     def step(self, dt_real: float = 1.0) -> Dict[str, Any]:
         """
         Advance one simulation step.
@@ -197,6 +257,14 @@ class DataCenterSimulation:
         dt_sim = dt_real * self.speed_multiplier
         self.sim_time += dt_sim
         self.tick_count += 1
+
+        # Handle active heatwave injection timer
+        if self.heatwave_timer > 0:
+            self.heatwave_timer -= dt_sim
+            if self.heatwave_timer <= 0:
+                self.heatwave_temp_boost = 0.0
+                self._add_event("ENVIRONMENT", "INFO", "External heatwave dissipated; ambient temperature normalized.", "Ambient restored")
+        eff_ambient = round(self.ambient_temp + self.heatwave_temp_boost, 1)
 
         # Handle presentation mode automated walkthrough script
         if self.presentation_active:
@@ -234,11 +302,60 @@ class DataCenterSimulation:
             cpu_val = workload["cpu_util"]
             gpu_val = workload["gpu_util"]
 
-            # 2. Advance Actuator (slew rate towards target)
+            # Current state telemetry snapshot
+            current_rack_temp = tm.temperature
+            pre_telemetry = {
+                "temperature": current_rack_temp,
+                "fan_speed": act.actual_fan_speed,
+                "cpu_usage": cpu_val,
+                "gpu_usage": gpu_val,
+                "power": tm.base_power + (cpu_val * tm.cpu_power_factor) + (gpu_val * tm.gpu_power_factor),
+                "rate_of_rise": round(tm.history[-1] - tm.history[-2], 3) if len(tm.history) >= 2 else 0.0,
+                "humidity": tm.humidity,
+                "ambient_temp": eff_ambient
+            }
+
+            # 2. ML Prediction
+            inject_ml_fault = (self.system_failures["ml_failure"] and r_id == "RACK_1")
+            prediction = self.predictor.predict(
+                history=history,
+                telemetry=pre_telemetry,
+                inject_ml_failure=inject_ml_fault
+            )
+
+            # 3. Cooling Optimization
+            opt_decision = self.optimizer.optimize(
+                history=history,
+                telemetry=pre_telemetry,
+                control_mode=self.control_mode
+            )
+            ai_recommended_fan = opt_decision["recommended_fan_speed"]
+
+            # 4. Safety Controller Verification Layer
+            safety_eval = self.safety_controller.evaluate(
+                current_temp=current_rack_temp,
+                rate_of_rise=pre_telemetry["rate_of_rise"],
+                prediction=prediction,
+                ai_recommended_fan=ai_recommended_fan,
+                system_failures=self.system_failures
+            )
+
+            sanctioned_fan = safety_eval["sanctioned_fan_speed"]
+            is_overridden = safety_eval["overridden"]
+
+            # Operator manual override takes precedence if set
+            if self.manual_fan_override is not None:
+                sanctioned_fan = self.manual_fan_override
+                is_overridden = True
+                safety_eval["overridden"] = True
+                safety_eval["reason"] = f"Manual fan speed override ({self.manual_fan_override}%) enforced by operator."
+
+            # 5. Actuate Fan immediately (Closed Loop)
+            act.set_target(sanctioned_fan)
             act_state = act.step(dt_sim)
             actual_fan = act_state["actual_fan_speed"]
 
-            # 3. Advance Thermal Physics
+            # 6. Advance Thermal Physics with current active fan speed
             is_rack2_sensor_fault = (self.system_failures["sensor_failure"] and r_id == "RACK_2")
             thermal_state = tm.step(
                 cpu_util=cpu_val,
@@ -248,7 +365,10 @@ class DataCenterSimulation:
                 airflow_pct=100.0,
                 dt_seconds=dt_sim,
                 cooling_degradation=act_state["degradation_factor"],
-                inject_sensor_fault=is_rack2_sensor_fault
+                inject_sensor_fault=is_rack2_sensor_fault,
+                ambient_temp_override=eff_ambient,
+                inlet_temp_override=self.inlet_temp,
+                responsiveness_factor=self.thermal_responsiveness
             )
 
             # Update rack history
@@ -256,7 +376,7 @@ class DataCenterSimulation:
             if len(history) > 30:
                 history.pop(0)
 
-            # 4. Sensor Redundancy Check (Safety 4)
+            # 7. Sensor Redundancy Check (Safety 4)
             validated_temp, sensor_check = self.safety_controller.validate_sensors(
                 thermal_state["sensor_a"],
                 thermal_state["sensor_b"],
@@ -267,36 +387,8 @@ class DataCenterSimulation:
                 if self.tick_count % 15 == 0:
                     self._add_event(r_id, "WARNING", sensor_check["description"], "Median sensor used for control")
 
-            # 5. Virtual ESP32 publishes to Virtual MQTT broker
+            # 8. Virtual ESP32 publishes to Virtual MQTT broker
             esp.publish_telemetry(thermal_state)
-
-            # 6. ML Prediction
-            inject_ml_fault = (self.system_failures["ml_failure"] and r_id == "RACK_1")
-            prediction = self.predictor.predict(
-                history=history,
-                telemetry=thermal_state,
-                inject_ml_failure=inject_ml_fault
-            )
-
-            # 7. Cooling Optimization
-            opt_decision = self.optimizer.optimize(
-                history=history,
-                telemetry=thermal_state,
-                control_mode=self.control_mode
-            )
-            ai_recommended_fan = opt_decision["recommended_fan_speed"]
-
-            # 8. Safety Controller Verification Layer
-            safety_eval = self.safety_controller.evaluate(
-                current_temp=validated_temp,
-                rate_of_rise=thermal_state["rate_of_rise"],
-                prediction=prediction,
-                ai_recommended_fan=ai_recommended_fan,
-                system_failures=self.system_failures
-            )
-
-            sanctioned_fan = safety_eval["sanctioned_fan_speed"]
-            is_overridden = safety_eval["overridden"]
 
             # Merge safety checks into aggregate dashboard status
             for k, v in safety_eval["safety_checks"].items():
@@ -318,10 +410,7 @@ class DataCenterSimulation:
                 if self.tick_count % 12 == 0:
                     self._add_event(r_id, ev["severity"], ev["desc"], ev["action"])
 
-            # 9. Feed Sanctioned Fan into Physical Actuator (Closed Loop)
-            act.set_target(sanctioned_fan)
-
-            # 10. Energy Calculation
+            # 9. Energy Calculation
             p_cooling = self.rack_energy_models[r_id].calculate_power(
                 fan_speed_pct=actual_fan,
                 cooling_watts_removed=thermal_state["cooling_watts"]
@@ -336,7 +425,7 @@ class DataCenterSimulation:
             # Status designation for UI
             if validated_temp >= 27.0:
                 rack_status = "CRITICAL"
-            elif validated_temp >= 26.2 or thermal_state["rate_of_rise"] >= 0.25:
+            elif validated_temp >= 26.2 or (thermal_state["rate_of_rise"] >= 0.30 and validated_temp >= 24.8):
                 rack_status = "WARNING"
             elif sensor_check["has_anomaly"]:
                 rack_status = "SENSOR_FAULT"
@@ -440,6 +529,18 @@ class DataCenterSimulation:
             "primary_decision": primary_rack_decision,
             "events": self.event_log[:15],
             "mqtt_recent_messages": self.broker.get_recent_messages(limit=10),
+            "custom_settings": {
+                "ambient_temp": self.ambient_temp,
+                "inlet_temp": self.inlet_temp,
+                "thermal_responsiveness": self.thermal_responsiveness,
+                "workload_pattern": self.workload_gen.pattern,
+                "custom_cpu": self.workload_gen.custom_cpu,
+                "custom_gpu": self.workload_gen.custom_gpu,
+                "manual_fan": self.manual_fan_override,
+                "hard_temp_limit": self.safety_controller.hard_temp_limit,
+                "heatwave_active": self.heatwave_timer > 0,
+                "spike_active": self.workload_gen.spike_active
+            },
             "presentation": {
                 "active": self.presentation_active,
                 "step": self.presentation_step,
